@@ -91,6 +91,16 @@ jobs:
             echo "value=${{ inputs.version || '0.1.0-dev' }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # The JPEG tests need Pillow, and report inconclusive rather than fail without it.
+      - uses: actions/setup-python@v5
+        if: ${{ !matrix.cross }}
+        with:
+          python-version: '3.x'
+
+      - name: Install Pillow
+        if: ${{ !matrix.cross }}
+        run: python -m pip install --quiet pillow
+
       - name: Test
         # Only on the runner's own architecture; the cross-compiled targets are covered by the
         # x64 job on the same operating system.
@@ -178,6 +188,12 @@ jobs:
           else
             echo "value=${{ inputs.version || '0.1.0-dev' }}" >> "$GITHUB_OUTPUT"
           fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - run: python -m pip install --quiet pillow
 
       - run: dotnet test -c Release --nologo
 

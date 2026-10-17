@@ -23,6 +23,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # The JPEG tests generate their fixtures with Pillow and compare against its decoding.
+      # Without it they report inconclusive rather than fail, so it has to be in place first.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - run: python -m pip install --quiet pillow
+
       - run: dotnet build -c Release --nologo
 
       - run: dotnet test -c Release --no-build --nologo
@@ -33,7 +41,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --quiet pillow
           python - <<'PY'
           from PIL import Image
           for i in range(3):
