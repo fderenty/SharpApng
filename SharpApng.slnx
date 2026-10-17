@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SharpApng.Cli/SharpApng.Cli.csproj" />
+    <Project Path="src/SharpApng/SharpApng.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SharpApng.Tests/SharpApng.Tests.csproj" />
+  </Folder>
+</Solution>

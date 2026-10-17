@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The library uses no reflection, so it survives trimming and NativeAOT untouched.
+         This flag makes the compiler prove it rather than leaving it to chance. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>SharpApng</PackageId>
+    <Title>SharpApng</Title>
+    <Description>Dependency-free imaging library for .NET, with no native dependencies at all. Reads and writes animated PNG (APNG); decodes PNG, JPEG, GIF and BMP; resizes with premultiplied-alpha filtering. RGBA at 8 or 16 bits per channel. Trimming and NativeAOT safe.</Description>
+    <PackageTags>png;apng;jpeg;gif;bmp;animated;animation;image;rgba;imaging;decoder;encoder;resize;thumbnail;transparency</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Adds a JPEG decoder (baseline and progressive, with EXIF orientation) and image resampling with premultiplied-alpha filtering. GIF reading and APNG conversion from the previous release remain.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="PACKAGE.md" Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
+
+  <!--
+    No PackageReference on purpose. Everything this library needs is in the BCL:
+    System.IO.Compression.ZLibStream provides the exact zlib framing required by PNG IDAT.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SharpApng.Tests" />
+  </ItemGroup>
+
+</Project>

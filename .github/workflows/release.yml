@@ -1,0 +1,238 @@
+name: Release
+
+# NativeAOT cannot cross-compile from one operating system to another: linking uses the target
+# platform's own toolchain, so each binary is built on a runner of its own operating system.
+# Across architectures on Linux it can, and linux-arm (32-bit), which has no hosted runner, is
+# cross-compiled from x64 that way. SharpApng.Cli.csproj explains what that needs.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp on the artefacts
+        required: false
+        default: 0.1.0-dev
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            archive: zip
+          # Windows cross-compiles across architectures too, given the MSVC tools for the
+          # target, which the hosted image carries.
+          - rid: win-x86
+            runner: windows-latest
+            archive: zip
+            cross: true
+          - rid: win-arm64
+            runner: windows-latest
+            archive: zip
+            cross: true
+          - rid: linux-x64
+            runner: ubuntu-latest
+            archive: tar
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            archive: tar
+          # NativeAOT has built 32-bit ARM since .NET 9, but no hosted runner is 32-bit ARM, so
+          # this one is cross-compiled from x64.
+          - rid: linux-arm
+            runner: ubuntu-latest
+            archive: tar
+            cross: true
+          - rid: osx-arm64
+            runner: macos-latest
+            archive: tar
+          # If the Intel macOS runner is ever retired, drop this entry: Apple Silicon binaries
+          # run on Intel Macs only through Rosetta, so x64 is a real target, not a duplicate.
+          - rid: osx-x64
+            runner: macos-15-intel
+            archive: tar
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # NativeAOT links with clang against zlib; the runner images carry clang, but the zlib
+      # headers are not guaranteed to be present.
+      - name: Install native toolchain
+        if: startsWith(matrix.runner, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Cross-compiling also needs the target's gcc and libc (crt*.o, libgcc, libc), its objcopy,
+      # and lld; the project selects the last two. qemu runs the result as a smoke test.
+      - name: Install the 32-bit ARM cross toolchain
+        if: matrix.rid == 'linux-arm'
+        run: >
+          sudo apt-get install -y lld qemu-user
+          gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.version || '0.1.0-dev' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test
+        # Only on the runner's own architecture; the cross-compiled targets are covered by the
+        # x64 job on the same operating system.
+        if: ${{ !matrix.cross }}
+        run: dotnet test -c Release --nologo
+
+      - name: Publish
+        run: >
+          dotnet publish src/SharpApng.Cli/SharpApng.Cli.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          -p:Version=${{ steps.version.outputs.value }}
+          -o publish/${{ matrix.rid }}
+          --nologo
+
+      # The test step above skips a cross-compiled target, so at least prove the binary starts
+      # and round-trips a file wherever the runner can execute it: 32-bit ARM under qemu, whose
+      # -L is the prefix it puts before the ELF interpreter path, and x86 natively. An Arm64
+      # Windows binary cannot run on an x64 runner at all.
+      - name: Smoke test the cross-built binary
+        if: matrix.rid == 'linux-arm' || matrix.rid == 'win-x86'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.rid }}" in
+            linux-arm) run() { qemu-arm -L /usr/arm-linux-gnueabihf publish/linux-arm/SharpApng.Cli "$@"; } ;;
+            win-x86)   run() { publish/win-x86/SharpApng.Cli.exe "$@"; } ;;
+          esac
+          run --help > /dev/null
+          run create --output smoke.png assets/icon.png
+          run info smoke.png
+          run extract smoke.png smoke
+          test -f smoke/frame_0000.png
+
+      - name: Stage artefact
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="sharpapng-${{ steps.version.outputs.value }}-${{ matrix.rid }}"
+          mkdir -p "stage/$name"
+
+          # Ship the executable and the licence, nothing else: no debug symbols, no XML docs.
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            cp publish/${{ matrix.rid }}/SharpApng.Cli.exe "stage/$name/sharpapng.exe"
+          else
+            cp publish/${{ matrix.rid }}/SharpApng.Cli "stage/$name/sharpapng"
+            chmod +x "stage/$name/sharpapng"
+          fi
+          cp LICENSE README.md "stage/$name/"
+
+          mkdir -p dist
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd stage && 7z a -tzip "../dist/$name.zip" "$name") > /dev/null
+          else
+            tar -czf "dist/$name.tar.gz" -C stage "$name"
+          fi
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharpapng-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+
+  pack:
+    name: NuGet packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Source Link records the commit in the package; a shallow clone is enough for that
+          # but the full history keeps `git describe` style versioning available later.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.version || '0.1.0-dev' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: dotnet test -c Release --nologo
+
+      - name: Pack
+        run: >
+          dotnet pack -c Release -o packages
+          -p:Version=${{ steps.version.outputs.value }}
+          --nologo
+
+      - name: Show package contents
+        run: |
+          set -euo pipefail
+          for p in packages/*.nupkg; do
+            echo "=== $p"
+            unzip -l "$p" | grep -vE '_rels|\[Content_Types\]|package/services'
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: packages/*
+          if-no-files-found: error
+
+      # Only publish for real on a tag, and only when the key is configured. Without it the
+      # packages are still attached to the release, so a manual push stays possible.
+      - name: Push to nuget.org
+        if: github.ref_type == 'tag' && env.NUGET_API_KEY != ''
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: >
+          dotnet nuget push "packages/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "$NUGET_API_KEY"
+          --skip-duplicate
+
+  release:
+    name: Publish release
+    needs: [build, pack]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attach artefacts to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Create the release if the tag push has not already produced one, then attach.
+          gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" \
+                 --repo "${GITHUB_REPOSITORY}" \
+                 --title "${GITHUB_REF_NAME}" \
+                 --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"

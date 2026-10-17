@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet build -c Release --nologo
+
+      - run: dotnet test -c Release --no-build --nologo
+
+      # Prove the CLI actually runs and produces a file a third party can read, rather than
+      # only that the assertions inside the test project pass.
+      - name: Smoke test the CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from PIL import Image
+          for i in range(3):
+              im = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+              for y in range(8):
+                  for x in range(8):
+                      im.putpixel((x + i * 8, y + i * 8), (255, i * 80, 0, 255))
+              im.save(f"f{i}.png")
+          PY
+
+          dotnet run --project src/SharpApng.Cli -c Release --no-build -- \
+            create --output out.png --delay 100 f0.png f1.png f2.png
+
+          python - <<'PY'
+          from PIL import Image
+          with Image.open("out.png") as im:
+              assert im.n_frames == 3, im.n_frames
+              assert im.size == (32, 32), im.size
+              for i in range(im.n_frames):
+                  im.seek(i)
+                  im.convert("RGBA").load()
+          print("Pillow read the animation back correctly.")
+          PY
+
+          # A separate poster must survive create followed by extract.
+          dotnet run --project src/SharpApng.Cli -c Release --no-build -- \
+            create --output posted.png --delay 100 --poster f0.png f1.png f2.png
+          dotnet run --project src/SharpApng.Cli -c Release --no-build -- \
+            extract posted.png ./posted
+          test -f posted/poster.png
+
+          python - <<'PY'
+          from PIL import Image
+          with Image.open("posted.png") as im:
+              assert im.info.get("default_image") is True, "the poster was not written"
+              assert im.n_frames == 3, im.n_frames   # the poster plus two animation frames
+          print("The poster survived the round trip.")
+          PY
+
+  aot-analysis:
+    name: NativeAOT analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # A real NativeAOT link, so trim and AOT warnings fail the build here rather than at
+      # release time. Warnings are errors across the repository.
+      - name: Publish native
+        run: >
+          dotnet publish src/SharpApng.Cli/SharpApng.Cli.csproj
+          -c Release -r linux-x64 -o publish --nologo
+
+      - name: Check the binary works and is self-contained
+        run: |
+          set -euo pipefail
+          ls -lh publish/SharpApng.Cli
+          ldd publish/SharpApng.Cli || true
+          ./publish/SharpApng.Cli --help

@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>SharpApng.Cli</RootNamespace>
+    <!-- Packed as a dotnet tool, the command is `sharpapng`; the assembly keeps the project name
+         so NuGet can tell it apart from the library. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>sharpapng</ToolCommandName>
+    <PackageId>SharpApng.Cli</PackageId>
+    <Title>sharpapng command line tool</Title>
+    <Description>Command line tool for building and inspecting animated PNGs. Creates an APNG from a sequence of PNG or BMP images, lists a file's frames and delays, and splits an animation back into composited still frames.</Description>
+    <PackageTags>png;apng;animated;animation;cli;dotnet-tool;imaging</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>First release. create, info and extract commands.</PackageReleaseNotes>
+    <!-- No culture-specific behaviour anywhere, so drop ICU: smaller output, one less moving
+         part, and a hard requirement for a compact NativeAOT binary. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!--
+    Native publishing.
+
+    Every runtime identifier gets a real NativeAOT binary with no runtime to install, 32-bit
+    ARM included: NativeAOT has supported linux-arm since .NET 9.
+
+    NativeAOT cannot cross-compile from one operating system to another, so each binary is
+    built on its own OS. Across architectures on Linux it can, given three things:
+
+      - the target's cross gcc and libc, which supply crt*.o, libgcc and libc;
+      - lld, because the SDK otherwise asks clang for ld.bfd, and for armv7 that resolves
+        to the host's, which links x86 only;
+      - the target's objcopy to strip symbols. Without it the link succeeds and the publish
+        then fails at its very last step, which looks exactly like the architecture being
+        unsupported.
+
+    See .github/workflows/release.yml for the packages.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishAot>true</PublishAot>
+    <StripSymbols>true</StripSymbols>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64' and '$(NETCoreSdkRuntimeIdentifier)' != 'linux-arm64'">
+    <LinkerFlavor>lld</LinkerFlavor>
+    <ObjCopyName>aarch64-linux-gnu-objcopy</ObjCopyName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm' and '$(NETCoreSdkRuntimeIdentifier)' != 'linux-arm'">
+    <LinkerFlavor>lld</LinkerFlavor>
+    <ObjCopyName>arm-linux-gnueabihf-objcopy</ObjCopyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="PACKAGE.md" Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpApng\SharpApng.csproj" />
+  </ItemGroup>
+
+</Project>

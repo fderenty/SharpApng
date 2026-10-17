@@ -1,0 +1,40 @@
+<Project>
+
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+    <Authors>Frédéric Derenty</Authors>
+    <Copyright>Copyright © 2026 Frédéric Derenty</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/fderenty/SharpApng</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/fderenty/SharpApng</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>icon.png</PackageIcon>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Keep the AOT and trimming analysers on at all times, not only when publishing with a
+         runtime identifier. They catch reflection and dynamic-code patterns at build time, on
+         any machine, without needing a native linker present. -->
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Ship symbols and Source Link so consumers can step into the library from their own
+         debugger. Source Link is built into the SDK from .NET 8 onward, so this adds no
+         PackageReference and leaves the dependency graph empty. -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <!-- Set by CI so released packages are byte-for-byte reproducible from a given commit. -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- The icon is shared by both packages and lives once at the repository root. -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+</Project>

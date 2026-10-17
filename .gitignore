@@ -1,0 +1,33 @@
+## Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+dist/
+*.user
+*.suo
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.sln.docstates
+
+## Test and coverage
+[Tt]est[Rr]esult*/
+*.coverage
+*.trx
+coverage*.json
+coverage*.xml
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+
+## OS
+.DS_Store
+Thumbs.db

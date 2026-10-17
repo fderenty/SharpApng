@@ -1,0 +1,35 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_size = 4
+
+# Use language keywords rather than framework type names
+dotnet_style_predefined_type_for_locals_parameters_members = true:warning
+dotnet_style_predefined_type_for_member_access = true:warning
+
+# Prefer readonly and expression bodies where they read better
+dotnet_style_readonly_field = true:warning
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+
+# Braces may be omitted only for single-line statements, matching the code here
+csharp_prefer_braces = when_multiline:suggestion
+
+# Namespaces are file-scoped throughout
+csharp_style_namespace_declarations = file_scoped:warning
+
+[*.{csproj,props,targets,slnx,xml}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
