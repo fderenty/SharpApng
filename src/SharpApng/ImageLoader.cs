@@ -8,7 +8,7 @@ namespace SharpApng;
 /// </remarks>
 public static class ImageLoader
 {
-    /// <summary>Loads a PNG or BMP file.</summary>
+    /// <summary>Loads a PNG, BMP, JPEG or GIF file, as <see cref="Load"/> does.</summary>
     public static RgbaImage LoadFile(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -16,7 +16,7 @@ public static class ImageLoader
     }
 
     /// <summary>
-    /// Loads a PNG, BMP or GIF from memory. Animated sources yield their first frame; use
+    /// Loads a PNG, BMP, JPEG or GIF from memory. Animated sources yield their first frame; use
     /// <see cref="AnimationLoader"/> to keep the whole animation.
     /// </summary>
     /// <exception cref="NotSupportedException">The data is in none of those formats.</exception>

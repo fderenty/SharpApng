@@ -19,7 +19,7 @@
     <Description>Dependency-free imaging library for .NET, with no native dependencies at all. Reads and writes animated PNG (APNG); decodes PNG, JPEG, GIF and BMP; resizes with premultiplied-alpha filtering. RGBA at 8 or 16 bits per channel. Trimming and NativeAOT safe.</Description>
     <PackageTags>png;apng;jpeg;gif;bmp;animated;animation;image;rgba;imaging;decoder;encoder;resize;thumbnail;transparency</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Adds a JPEG decoder (baseline and progressive, with EXIF orientation) and image resampling with premultiplied-alpha filtering. GIF reading and APNG conversion from the previous release remain.</PackageReleaseNotes>
+    <PackageReleaseNotes>First release on NuGet. Reads and writes animated PNG; decodes PNG, JPEG (baseline and progressive, with EXIF orientation), GIF and BMP; converts GIF to APNG; resizes with premultiplied-alpha filtering.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

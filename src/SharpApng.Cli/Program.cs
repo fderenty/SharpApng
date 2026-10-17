@@ -465,7 +465,7 @@ internal static class Program
               sharpapng info walk.png
               sharpapng extract walk.png ./frames
 
-            create takes PNG or BMP images, all matching the first one's dimensions.
+            create takes PNG, JPEG, GIF (first frame) or BMP images, all matching the first one's dimensions.
             convert takes a GIF, a JPEG, a PNG or a BMP and writes a PNG.
             resize takes any of those and never enlarges when using --size.
             extract writes composited frames, plus poster.png when the file carries one.

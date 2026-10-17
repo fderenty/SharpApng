@@ -14,10 +14,10 @@
     <ToolCommandName>sharpapng</ToolCommandName>
     <PackageId>SharpApng.Cli</PackageId>
     <Title>sharpapng command line tool</Title>
-    <Description>Command line tool for building and inspecting animated PNGs. Creates an APNG from a sequence of PNG or BMP images, lists a file's frames and delays, and splits an animation back into composited still frames.</Description>
+    <Description>Command line tool for building and inspecting animated PNGs. Creates an APNG from a sequence of PNG, JPEG, GIF or BMP images, converts GIF to APNG and JPEG or BMP to PNG, makes thumbnails, lists a file's frames and delays, and splits an animation back into composited still frames.</Description>
     <PackageTags>png;apng;animated;animation;cli;dotnet-tool;imaging</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>First release. create, info and extract commands.</PackageReleaseNotes>
+    <PackageReleaseNotes>First release on NuGet. create, convert, resize, info and extract commands; create and extract carry a separate poster image for viewers without APNG support.</PackageReleaseNotes>
     <!-- No culture-specific behaviour anywhere, so drop ICU: smaller output, one less moving
          part, and a hard requirement for a compact NativeAOT binary. -->
     <InvariantGlobalization>true</InvariantGlobalization>

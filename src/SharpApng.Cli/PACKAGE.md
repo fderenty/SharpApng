@@ -30,7 +30,8 @@ sharpapng create --output <file> [options] <image>...
       --smallest        Compress as tightly as zlib allows.
 ```
 
-Inputs may be PNG or BMP, and every frame must match the first one's dimensions. By default only
+Inputs may be PNG, JPEG, GIF (its first frame) or BMP, and every frame must match the first one's
+dimensions. By default only
 the rectangle that changed between frames is stored, which on typical content is a large saving:
 a 320×320, 24-frame animation with a small moving sprite came out **91.9 % smaller** than storing
 whole frames.
@@ -57,7 +58,7 @@ This PNG carries no acTL chunk, so it is a still image. ...
 ## Standalone binaries
 
 If you would rather not install a .NET runtime, each release also ships a single self-contained
-executable for Windows x64, Linux x64/ARM64/ARM and macOS on both architectures.
+executable for Windows x64/x86/ARM64, Linux x64/ARM64/ARM and macOS on both architectures.
 
 ---
 
