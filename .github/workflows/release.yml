@@ -40,19 +40,21 @@ jobs:
             archive: zip
             cross: true
           # Linux runners are pinned, never ubuntu-latest. A binary needs the glibc symbol
-          # versions it was linked against: built on 24.04 that is 2.34, which reaches Ubuntu
-          # 22.04, Debian 12 and RHEL 9. The cross packages below are also named for 24.04.
-          # Moving to a newer image is a deliberate change: check both before doing it.
+          # versions it was linked against: 2.34 here, which reaches Ubuntu 22.04, Debian 12 and
+          # RHEL 9. The .NET runtime sets that floor, not the image: built on 24.04 and on 26.04
+          # the binaries need 2.34 alike and produce byte-identical output. Moving to a newer
+          # image is still a deliberate change: re-measure the floor and check that the cross
+          # packages below keep their names.
           - rid: linux-x64
-            runner: ubuntu-24.04
+            runner: ubuntu-26.04
             archive: tar
           - rid: linux-arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
             archive: tar
           # NativeAOT has built 32-bit ARM since .NET 9, but no hosted runner is 32-bit ARM, so
           # this one is cross-compiled from x64.
           - rid: linux-arm
-            runner: ubuntu-24.04
+            runner: ubuntu-26.04
             archive: tar
             cross: true
           - rid: osx-arm64
@@ -171,7 +173,7 @@ jobs:
 
   pack:
     name: NuGet packages
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # id-token lets the job ask GitHub for the signed token that nuget.org trusted publishing
     # exchanges for a one-hour API key, so no key is stored anywhere.
     permissions:
@@ -251,7 +253,7 @@ jobs:
     name: Publish release
     needs: [build, pack]
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/download-artifact@v8
         with:
