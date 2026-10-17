@@ -168,6 +168,11 @@ jobs:
   pack:
     name: NuGet packages
     runs-on: ubuntu-latest
+    # id-token lets the job ask GitHub for the signed token that nuget.org trusted publishing
+    # exchanges for a one-hour API key, so no key is stored anywhere.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -217,16 +222,25 @@ jobs:
           path: packages/*
           if-no-files-found: error
 
-      # Only publish for real on a tag, and only when the key is configured. Without it the
-      # packages are still attached to the release, so a manual push stays possible.
+      # Publishing uses nuget.org trusted publishing: a policy on the fderenty account trusts
+      # this workflow file in fderenty/SharpApng, and nothing else can obtain a key.
+      #
+      # It runs only on a tag, and only once the repository variable NUGET_PUBLISH is 'true',
+      # so a release can be cut before the policy exists. Without it the packages are still
+      # attached to the release, so a manual push stays possible.
+      - name: Log in to nuget.org
+        id: nuget
+        if: github.ref_type == 'tag' && vars.NUGET_PUBLISH == 'true'
+        uses: NuGet/login@v1
+        with:
+          user: fderenty
+
       - name: Push to nuget.org
-        if: github.ref_type == 'tag' && env.NUGET_API_KEY != ''
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        if: github.ref_type == 'tag' && vars.NUGET_PUBLISH == 'true'
         run: >
           dotnet nuget push "packages/*.nupkg"
           --source https://api.nuget.org/v3/index.json
-          --api-key "$NUGET_API_KEY"
+          --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}"
           --skip-duplicate
 
   release:
