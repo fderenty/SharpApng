@@ -20,7 +20,7 @@
     <!-- MIT for this tool's own code, Apache-2.0 for the ZopfliSharp it embeds. The library
          package stays MIT alone. See THIRD-PARTY-NOTICES.md. -->
     <PackageLicenseExpression>MIT AND Apache-2.0</PackageLicenseExpression>
-    <PackageReleaseNotes>First release on NuGet. create, convert, resize, info and extract commands; create and extract carry a separate poster image for viewers without APNG support.</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds --zopfli and --zopfli-iterations to create, convert, resize and extract: files typically 6-9 % smaller than with --smallest, at a steep cost in time. Includes ZopfliSharp (Apache-2.0); see THIRD-PARTY-NOTICES.md. extract now rejects unexpected arguments. The standalone binaries add Windows x86 and ARM64, and build 32-bit ARM Linux with NativeAOT.</PackageReleaseNotes>
     <!-- No culture-specific behaviour anywhere, so drop ICU: smaller output, one less moving
          part, and a hard requirement for a compact NativeAOT binary. -->
     <InvariantGlobalization>true</InvariantGlobalization>

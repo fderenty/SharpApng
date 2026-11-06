@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Frédéric Derenty</Authors>
     <Copyright>Copyright © 2026 Frédéric Derenty</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
