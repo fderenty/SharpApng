@@ -8,7 +8,8 @@ namespace SharpApng;
 /// </summary>
 /// <remarks>
 /// The zlib framing itself comes from <see cref="ZLibStream"/> in the BCL, which is exactly the
-/// container PNG asks for. That is what lets this library carry no third-party dependency.
+/// container PNG asks for. That is what lets this library carry no third-party dependency; a
+/// caller wanting a stronger compressor supplies one as a <see cref="ZlibCompressor"/>.
 /// </remarks>
 internal static class PngRaster
 {
@@ -16,8 +17,14 @@ internal static class PngRaster
     /// Filters and compresses an image as 8-bit or 16-bit RGBA. The output always describes
     /// colour type 6, non-interlaced.
     /// </summary>
-    public static byte[] Encode(RgbaImage image, CompressionLevel level)
+    /// <param name="image">The image to encode.</param>
+    /// <param name="level">How hard the runtime's zlib works. Ignored with a compressor.</param>
+    /// <param name="compressor">A replacement for the runtime's zlib, or null to keep it.</param>
+    public static byte[] Encode(RgbaImage image, CompressionLevel level, ZlibCompressor? compressor = null)
     {
+        if (compressor is not null)
+            return EncodeWith(image, compressor);
+
         int bpp = image.BytesPerPixel;
         int rowBytes = image.Stride;
 
@@ -42,6 +49,71 @@ internal static class PngRaster
         }
 
         return output.ToArray();
+    }
+
+    /// <summary>
+    /// Filters every row into one buffer, the form a whole-input compressor needs, and hands it
+    /// over. The filter choices are the ones <see cref="Encode"/> makes without a compressor.
+    /// </summary>
+    private static byte[] EncodeWith(RgbaImage image, ZlibCompressor compressor)
+    {
+        int bpp = image.BytesPerPixel;
+        int rowBytes = image.Stride;
+
+        long length = (long)image.Height * (rowBytes + 1);
+        if (length > Array.MaxLength)
+        {
+            throw new NotSupportedException(
+                $"A {image.Width}x{image.Height} {image.Format} image needs {length:N0} bytes of scanlines, " +
+                "more than one buffer holds, so it cannot be handed to a compressor. Leave " +
+                "Compressor unset to stream it through the runtime's zlib instead.");
+        }
+
+        byte[] scanlines = new byte[length];
+        byte[] current = new byte[rowBytes];
+        byte[] previous = new byte[rowBytes];
+        byte[] scratch = new byte[rowBytes];
+
+        for (int y = 0; y < image.Height; y++)
+        {
+            CopyRowToNetworkOrder(image, y, current);
+
+            int offset = y * (rowBytes + 1);
+            int filterType = PngFilter.ChooseAndApply(current, previous, scanlines.AsSpan(offset + 1, rowBytes), scratch, bpp);
+            scanlines[offset] = (byte)filterType;
+
+            (current, previous) = (previous, current);
+        }
+
+        byte[] compressed = compressor(scanlines);
+        RequireZlibStream(compressed);
+        return compressed;
+    }
+
+    /// <summary>
+    /// Checks that a compressor returned a zlib stream rather than raw deflate or gzip, the two
+    /// easy mistakes, both of which would leave a PNG no decoder can read.
+    /// </summary>
+    private static void RequireZlibStream(byte[]? data)
+    {
+        // Two header bytes, at least one deflate byte and the four-byte Adler-32.
+        if (data is null || data.Length < 7)
+            throw new InvalidOperationException("The compressor returned no zlib stream.");
+
+        int cmf = data[0];
+        int flg = data[1];
+
+        bool deflateMethod = (cmf & 0x0F) == 8 && (cmf >> 4) <= 7;
+        bool checkBitsHold = ((cmf << 8) | flg) % 31 == 0;
+        bool noPresetDictionary = (flg & 0x20) == 0;
+
+        if (!deflateMethod || !checkBitsHold || !noPresetDictionary)
+        {
+            throw new InvalidOperationException(
+                "The compressor must return a complete zlib stream (RFC 1950), header and Adler-32 " +
+                $"included; this one starts 0x{cmf:X2} 0x{flg:X2}. Raw deflate or gzip output makes " +
+                "a PNG that no decoder can read.");
+        }
     }
 
     /// <summary>

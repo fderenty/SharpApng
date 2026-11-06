@@ -37,6 +37,22 @@ var options = new ApngWriterOptions
 };
 ```
 
+## A stronger compressor
+
+The runtime's zlib compresses every image unless you supply a `ZlibCompressor`: it receives an
+image's filtered scanlines and returns a complete zlib stream. With
+[ZopfliSharp](https://www.nuget.org/packages/ZopfliSharp), one line:
+
+```csharp
+var options = new ApngWriterOptions { Compressor = data => Zopfli.Compress(data, ZopfliFormat.Zlib) };
+```
+
+`PngCodec.Encode`, `EncodeFile` and `EncodeToArray` take one too. The library itself stays free
+of dependencies: the compressor is yours to reference, and without one the output is
+byte-for-byte unchanged. Zopfli typically gives files 6–9 % smaller than `SmallestSize`, at a
+steep cost in time. Raw deflate or gzip output is refused rather than written into a PNG no
+decoder could read.
+
 ## Reading
 
 ```csharp

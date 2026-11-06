@@ -80,6 +80,35 @@ jobs:
           print("The poster survived the round trip.")
           PY
 
+          # --zopfli must store the very same pixels, in a file no larger, and Pillow must read
+          # it like any other.
+          dotnet run --project src/SharpApng.Cli -c Release --no-build -- \
+            create --output zopfli.png --delay 100 --zopfli f0.png f1.png f2.png
+
+          python - <<'PY'
+          import os
+          from PIL import Image
+          def frames(path):
+              with Image.open(path) as im:
+                  out = []
+                  for i in range(im.n_frames):
+                      im.seek(i)
+                      out.append(im.convert("RGBA").tobytes())
+                  return out
+          assert frames("zopfli.png") == frames("out.png"), "Zopfli changed the pixels"
+          zopfli, zlib = os.path.getsize("zopfli.png"), os.path.getsize("out.png")
+          assert zopfli <= zlib, (zopfli, zlib)
+          print(f"Pillow read the Zopfli animation: same pixels, {zopfli} bytes against {zlib}.")
+          PY
+
+          # Zopfli replaces zlib, so asking for both is refused before any file is created.
+          if dotnet run --project src/SharpApng.Cli -c Release --no-build -- \
+               create --output refused.png --zopfli --smallest f0.png; then
+            echo "--zopfli with --smallest should have been refused"
+            exit 1
+          fi
+          test ! -e refused.png
+
   aot-analysis:
     name: NativeAOT analysis
     runs-on: ubuntu-26.04

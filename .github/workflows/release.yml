@@ -148,14 +148,15 @@ jobs:
           name="sharpapng-${{ steps.version.outputs.value }}-${{ matrix.rid }}"
           mkdir -p "stage/$name"
 
-          # Ship the executable and the licence, nothing else: no debug symbols, no XML docs.
+          # Ship the executable, the licence and the third-party notices for the ZopfliSharp it
+          # embeds, nothing else: no debug symbols, no XML docs.
           if [[ "${{ matrix.rid }}" == win-* ]]; then
             cp publish/${{ matrix.rid }}/SharpApng.Cli.exe "stage/$name/sharpapng.exe"
           else
             cp publish/${{ matrix.rid }}/SharpApng.Cli "stage/$name/sharpapng"
             chmod +x "stage/$name/sharpapng"
           fi
-          cp LICENSE README.md "stage/$name/"
+          cp LICENSE README.md THIRD-PARTY-NOTICES.md "stage/$name/"
 
           mkdir -p dist
           if [ "${{ matrix.archive }}" = "zip" ]; then

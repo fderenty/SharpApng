@@ -153,7 +153,7 @@ public sealed class ApngWriter : IDisposable
 
         // No fcTL, so this image is the default image only. The canvas stays transparent because
         // animation-aware viewers never composite it.
-        _writer.Write("IDAT", PngRaster.Encode(image, _options.CompressionLevel));
+        _writer.Write("IDAT", PngRaster.Encode(image, _options.CompressionLevel, _options.Compressor));
         _posterWritten = true;
     }
 
@@ -234,7 +234,10 @@ public sealed class ApngWriter : IDisposable
         }
 
         WriteFrameControl(image.Width, image.Height, x, y, delayMilliseconds, disposeOp, blendOp);
-        _writer.Write("fdAT", SequenceBytes(NextSequence()), PngRaster.Encode(image, _options.CompressionLevel));
+        _writer.Write(
+            "fdAT",
+            SequenceBytes(NextSequence()),
+            PngRaster.Encode(image, _options.CompressionLevel, _options.Compressor));
 
         ApplyToCanvas(image, x, y, disposeOp, blendOp);
         _frameCount++;
@@ -301,7 +304,7 @@ public sealed class ApngWriter : IDisposable
     private void WriteFirstFrame(RgbaImage image, int delayMilliseconds)
     {
         WriteFrameControl(image.Width, image.Height, 0, 0, delayMilliseconds, DisposeOp.None, BlendOp.Source);
-        _writer.Write("IDAT", PngRaster.Encode(image, _options.CompressionLevel));
+        _writer.Write("IDAT", PngRaster.Encode(image, _options.CompressionLevel, _options.Compressor));
 
         image.Pixels.CopyTo(_canvas.Pixels, 0);
         _frameCount++;

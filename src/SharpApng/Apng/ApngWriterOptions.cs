@@ -11,6 +11,16 @@ public sealed class ApngWriterOptions
     public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.Optimal;
 
     /// <summary>
+    /// A compressor to use instead of the runtime's zlib for every <c>IDAT</c> and <c>fdAT</c>
+    /// the writer emits, the poster included. Null, the default, keeps the runtime's zlib.
+    /// </summary>
+    /// <remarks>
+    /// When set, <see cref="CompressionLevel"/> is ignored. See <see cref="ZlibCompressor"/> for
+    /// what it must return.
+    /// </remarks>
+    public ZlibCompressor? Compressor { get; set; }
+
+    /// <summary>
     /// How many times the animation plays; zero means forever. Defaults to zero.
     /// </summary>
     public int LoopCount { get; set; }

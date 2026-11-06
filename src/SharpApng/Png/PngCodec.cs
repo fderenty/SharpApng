@@ -94,8 +94,57 @@ public static class PngCodec
         Encode(image, file, level);
     }
 
+    /// <summary>Encodes an image to a PNG file, compressing it with the given compressor.</summary>
+    /// <param name="image">The image to encode.</param>
+    /// <param name="path">Where to write it.</param>
+    /// <param name="compressor">What produces the zlib stream, in place of the runtime's zlib.</param>
+    /// <remarks>
+    /// The file is written only once compression has finished, so a slow compressor never leaves
+    /// an empty file in place, and a failing one leaves none at all.
+    /// </remarks>
+    public static void EncodeFile(RgbaImage image, string path, ZlibCompressor compressor)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentNullException.ThrowIfNull(compressor);
+
+        File.WriteAllBytes(path, EncodeToArray(image, compressor));
+    }
+
     /// <summary>Encodes an image as a PNG onto a stream.</summary>
     public static void Encode(RgbaImage image, Stream stream, CompressionLevel level = CompressionLevel.Optimal)
+        => Encode(image, stream, level, compressor: null);
+
+    /// <summary>Encodes an image as a PNG onto a stream, compressing it with the given compressor.</summary>
+    /// <param name="image">The image to encode.</param>
+    /// <param name="stream">Where to write it.</param>
+    /// <param name="compressor">What produces the zlib stream, in place of the runtime's zlib.</param>
+    public static void Encode(RgbaImage image, Stream stream, ZlibCompressor compressor)
+    {
+        ArgumentNullException.ThrowIfNull(compressor);
+        Encode(image, stream, CompressionLevel.Optimal, compressor);
+    }
+
+    /// <summary>Encodes an image as a PNG into a new byte array.</summary>
+    public static byte[] EncodeToArray(RgbaImage image, CompressionLevel level = CompressionLevel.Optimal)
+    {
+        using var buffer = new MemoryStream();
+        Encode(image, buffer, level);
+        return buffer.ToArray();
+    }
+
+    /// <summary>Encodes an image as a PNG into a new byte array, compressing it with the given compressor.</summary>
+    /// <param name="image">The image to encode.</param>
+    /// <param name="compressor">What produces the zlib stream, in place of the runtime's zlib.</param>
+    public static byte[] EncodeToArray(RgbaImage image, ZlibCompressor compressor)
+    {
+        ArgumentNullException.ThrowIfNull(compressor);
+
+        using var buffer = new MemoryStream();
+        Encode(image, buffer, compressor);
+        return buffer.ToArray();
+    }
+
+    private static void Encode(RgbaImage image, Stream stream, CompressionLevel level, ZlibCompressor? compressor)
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentNullException.ThrowIfNull(stream);
@@ -110,15 +159,7 @@ public static class PngCodec
             colorType: PngHeader.ColorTypeTruecolorAlpha);
 
         writer.Write("IHDR", header.ToPayload());
-        writer.Write("IDAT", PngRaster.Encode(image, level));
+        writer.Write("IDAT", PngRaster.Encode(image, level, compressor));
         writer.Write("IEND", []);
-    }
-
-    /// <summary>Encodes an image as a PNG into a new byte array.</summary>
-    public static byte[] EncodeToArray(RgbaImage image, CompressionLevel level = CompressionLevel.Optimal)
-    {
-        using var buffer = new MemoryStream();
-        Encode(image, buffer, level);
-        return buffer.ToArray();
     }
 }

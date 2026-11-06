@@ -42,7 +42,7 @@ internal static class Program
         string? output = null;
         var options = new GifReaderOptions();
         int loopOverride = -1;
-        CompressionLevel level = CompressionLevel.Optimal;
+        var compression = new CompressionChoice();
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -75,11 +75,19 @@ internal static class Program
                     break;
 
                 case "--fast":
-                    level = CompressionLevel.Fastest;
+                    compression.SetLevel(CompressionLevel.Fastest);
                     break;
 
                 case "--smallest":
-                    level = CompressionLevel.SmallestSize;
+                    compression.SetLevel(CompressionLevel.SmallestSize);
+                    break;
+
+                case "--zopfli":
+                    compression.UseZopfli();
+                    break;
+
+                case "--zopfli-iterations":
+                    compression.UseZopfli(ParseInt(RequireValue(args, ref i), "--zopfli-iterations"));
                     break;
 
                 default:
@@ -95,12 +103,16 @@ internal static class Program
             return Fail("convert needs an input file.");
 
         output ??= Path.ChangeExtension(input, ".png");
+        ZlibCompressor? compressor = compression.CreateCompressor();
 
         AnimationDocument document = AnimationLoader.LoadFile(input, options);
         if (loopOverride >= 0)
             document.LoopCount = loopOverride;
 
-        ApngWriter.WriteFile(document, output, new ApngWriterOptions { CompressionLevel = level });
+        ApngWriter.WriteFile(
+            document,
+            output,
+            new ApngWriterOptions { CompressionLevel = compression.Level, Compressor = compressor });
 
         var before = new FileInfo(input);
         var after = new FileInfo(output);
@@ -135,7 +147,7 @@ internal static class Program
         bool optimize = true;
         bool sixteenBit = false;
         string? posterPath = null;
-        CompressionLevel level = CompressionLevel.Optimal;
+        var compression = new CompressionChoice();
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -166,11 +178,19 @@ internal static class Program
                     break;
 
                 case "--fast":
-                    level = CompressionLevel.Fastest;
+                    compression.SetLevel(CompressionLevel.Fastest);
                     break;
 
                 case "--smallest":
-                    level = CompressionLevel.SmallestSize;
+                    compression.SetLevel(CompressionLevel.SmallestSize);
+                    break;
+
+                case "--zopfli":
+                    compression.UseZopfli();
+                    break;
+
+                case "--zopfli-iterations":
+                    compression.UseZopfli(ParseInt(RequireValue(args, ref i), "--zopfli-iterations"));
                     break;
 
                 default:
@@ -184,6 +204,7 @@ internal static class Program
         if (inputs.Count == 0)
             return Fail("create needs at least one input image.");
 
+        ZlibCompressor? compressor = compression.CreateCompressor();
         PixelFormat format = sixteenBit ? PixelFormat.Rgba64 : PixelFormat.Rgba32;
         RgbaImage first = ImageLoader.LoadFile(inputs[0]).ConvertTo(format);
 
@@ -204,7 +225,8 @@ internal static class Program
         {
             LoopCount = loop,
             OptimizeFrames = optimize,
-            CompressionLevel = level,
+            CompressionLevel = compression.Level,
+            Compressor = compressor,
         };
 
         using (FileStream file = File.Create(output))
@@ -246,6 +268,7 @@ internal static class Program
         int width = 0;
         int height = 0;
         ResampleFilter filter = ResampleFilter.Box;
+        var compression = new CompressionChoice();
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -275,6 +298,14 @@ internal static class Program
                     break;
                 }
 
+                case "--zopfli":
+                    compression.UseZopfli();
+                    break;
+
+                case "--zopfli-iterations":
+                    compression.UseZopfli(ParseInt(RequireValue(args, ref i), "--zopfli-iterations"));
+                    break;
+
                 default:
                     if (input is null)
                         input = args[i];
@@ -288,13 +319,14 @@ internal static class Program
             return Fail("resize needs an input file.");
 
         output ??= Path.ChangeExtension(input, ".thumb.png");
+        ZlibCompressor? compressor = compression.CreateCompressor();
 
         RgbaImage source = ImageLoader.LoadFile(input);
         RgbaImage result = width > 0 && height > 0
             ? RgbaImageOps.Resize(source, width, height, filter)
             : RgbaImageOps.ResizeToFit(source, size, filter);
 
-        PngCodec.EncodeFile(result, output);
+        WritePng(result, output, compressor);
 
         Console.WriteLine(
             $"Wrote {output}: {source.Width}x{source.Height} -> {result.Width}x{result.Height} " +
@@ -368,17 +400,44 @@ internal static class Program
 
     private static int Extract(string[] args)
     {
-        if (args.Length < 2)
-            return Fail("extract needs a source file and an output directory.");
+        var paths = new List<string>();
+        var compression = new CompressionChoice();
 
-        AnimationDocument document = ApngReader.ReadFile(args[0]);
-        Directory.CreateDirectory(args[1]);
+        for (int i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--zopfli":
+                    compression.UseZopfli();
+                    break;
+
+                case "--zopfli-iterations":
+                    compression.UseZopfli(ParseInt(RequireValue(args, ref i), "--zopfli-iterations"));
+                    break;
+
+                default:
+                    paths.Add(args[i]);
+                    break;
+            }
+        }
+
+        if (paths.Count < 2)
+            return Fail("extract needs a source file and an output directory.");
+        if (paths.Count > 2)
+            return Fail($"Unexpected argument '{paths[2]}'. extract takes a source file and an output directory.");
+
+        string source = paths[0];
+        string directory = paths[1];
+        ZlibCompressor? compressor = compression.CreateCompressor();
+
+        AnimationDocument document = ApngReader.ReadFile(source);
+        Directory.CreateDirectory(directory);
 
         int index = 0;
         foreach (RgbaImage rendered in document.RenderFrames())
         {
-            string path = Path.Combine(args[1], $"frame_{index:D4}.png");
-            PngCodec.EncodeFile(rendered, path);
+            string path = Path.Combine(directory, $"frame_{index:D4}.png");
+            WritePng(rendered, path, compressor);
             index++;
         }
 
@@ -386,15 +445,24 @@ internal static class Program
         {
             // The still that viewers without APNG support display. It sits outside the
             // animation, so it is not one of the numbered frames.
-            PngCodec.EncodeFile(poster, Path.Combine(args[1], "poster.png"));
-            Console.WriteLine($"Extracted {index} composited frames to {args[1]}, plus poster.png.");
+            WritePng(poster, Path.Combine(directory, "poster.png"), compressor);
+            Console.WriteLine($"Extracted {index} composited frames to {directory}, plus poster.png.");
         }
         else
         {
-            Console.WriteLine($"Extracted {index} composited frames to {args[1]}.");
+            Console.WriteLine($"Extracted {index} composited frames to {directory}.");
         }
 
         return 0;
+    }
+
+    /// <summary>Writes a still PNG with the runtime's zlib, or with the compressor when given one.</summary>
+    private static void WritePng(RgbaImage image, string path, ZlibCompressor? compressor)
+    {
+        if (compressor is null)
+            PngCodec.EncodeFile(image, path);
+        else
+            PngCodec.EncodeFile(image, path, compressor);
     }
 
     private static string RequireValue(string[] args, ref int index)
@@ -426,7 +494,7 @@ internal static class Program
               sharpapng convert <input> [--output <file>] [options]
               sharpapng resize <input> [--size <px>] [--output <file>]
               sharpapng info <file>
-              sharpapng extract <file> <directory>
+              sharpapng extract <file> <directory> [--zopfli]
 
             CREATE OPTIONS
               -o, --output <file>   Where to write the APNG. Required.
@@ -438,6 +506,11 @@ internal static class Program
                   --no-optimize     Store every frame whole instead of just what changed.
                   --fast            Compress quickly rather than tightly.
                   --smallest        Compress as tightly as zlib allows.
+                  --zopfli          Compress with Zopfli instead of zlib: typically 6-9 %
+                                    smaller than --smallest, but far slower, from seconds
+                                    for one image to minutes for a long animation.
+                  --zopfli-iterations <n>
+                                    Zopfli passes per image; implies --zopfli. Default 15.
 
             CONVERT OPTIONS
               -o, --output <file>      Where to write the APNG. Defaults to the input name.
@@ -448,6 +521,8 @@ internal static class Program
                   --literal-delays     Copy the stated delays instead of clamping very short
                                        ones to 100 ms the way browsers do.
                   --fast, --smallest   Compression effort.
+                  --zopfli, --zopfli-iterations <n>
+                                       As for create.
 
             RESIZE OPTIONS
               -o, --output <file>   Where to write the PNG. Defaults to <input>.thumb.png.
@@ -455,6 +530,12 @@ internal static class Program
               -w, --width <px>      Exact width, used with --height.
               -h, --height <px>     Exact height, used with --width.
               -f, --filter <name>   box (default), triangle or lanczos3.
+                  --zopfli, --zopfli-iterations <n>
+                                    As for create.
+
+            EXTRACT OPTIONS
+                  --zopfli, --zopfli-iterations <n>
+                                    As for create, for every frame written.
 
             EXAMPLES
               sharpapng create -o walk.png -d 80 frame*.png
@@ -462,6 +543,7 @@ internal static class Program
               sharpapng convert logo.gif -t background
               sharpapng convert banner.gif -o banner.png -t #ffffff --tolerance 8
               sharpapng resize photo.jpg -s 256 -o thumb.png
+              sharpapng resize logo.png -s 64 --zopfli -o icon.png
               sharpapng info walk.png
               sharpapng extract walk.png ./frames
 
@@ -469,6 +551,8 @@ internal static class Program
             convert takes a GIF, a JPEG, a PNG or a BMP and writes a PNG.
             resize takes any of those and never enlarges when using --size.
             extract writes composited frames, plus poster.png when the file carries one.
+
+            --zopfli uses ZopfliSharp (Apache-2.0); see THIRD-PARTY-NOTICES.md.
             """);
     }
 }

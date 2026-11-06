@@ -136,14 +136,15 @@ foreach ($target in $requested) {
     dotnet publish $project -c Release -r $rid -p:Version=$Version -o $publishPath --nologo
     if ($LASTEXITCODE -ne 0) { throw "Publishing $rid failed." }
 
-    # Ship the executable and the licence only: no symbols, no XML documentation.
+    # Ship the executable, the licence and the notices for the ZopfliSharp it embeds, nothing
+    # else: no symbols, no XML documentation.
     $stage = Join-Path $repoRoot "publish/stage/sharpapng-$Version-$rid"
     New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
     $exeName = if ($rid -like 'win-*') { 'SharpApng.Cli.exe' } else { 'SharpApng.Cli' }
     $outName = if ($rid -like 'win-*') { 'sharpapng.exe' } else { 'sharpapng' }
     Copy-Item (Join-Path $publishPath $exeName) (Join-Path $stage $outName)
-    Copy-Item (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'README.md') $stage
+    Copy-Item (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'README.md'), (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') $stage
 
     $archive = Join-Path $distPath "sharpapng-$Version-$rid$(if ($rid -like 'win-*') { '.zip' } else { '.tar.gz' })"
     if ($rid -like 'win-*') {

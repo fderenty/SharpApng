@@ -28,13 +28,24 @@ sharpapng create --output <file> [options] <image>...
       --no-optimize     Store every frame whole instead of just what changed.
       --fast            Compress quickly rather than tightly.
       --smallest        Compress as tightly as zlib allows.
+      --zopfli          Compress with Zopfli instead of zlib.
+      --zopfli-iterations <n>
+                        Zopfli passes per image; implies --zopfli. Default 15.
 ```
 
 Inputs may be PNG, JPEG, GIF (its first frame) or BMP, and every frame must match the first one's
-dimensions. By default only
-the rectangle that changed between frames is stored, which on typical content is a large saving:
-a 320×320, 24-frame animation with a small moving sprite came out **91.9 % smaller** than storing
-whole frames.
+dimensions. By default only the rectangle that changed between frames is stored, which on typical
+content is a large saving: a 320×320, 24-frame animation with a small moving sprite came out
+**91.9 % smaller** than storing whole frames.
+
+## Smaller files with Zopfli
+
+`--zopfli` works with every command that writes — `create`, `convert`, `resize` and `extract` —
+and compresses with Zopfli instead of zlib. The files are typically **6–9 % smaller** than with
+`--smallest`, with exactly the same pixels, and any PNG decoder reads them. The price is time:
+from a second or two for one image to minutes for a long animation. A 47-frame, 300×250 animation
+took 94 s instead of 1.4 s, a 12-frame one 13 s instead of 0.7 s. Worth it for assets compressed
+once and served often.
 
 `extract` writes *composited* frames — what a viewer displays — not the cropped sub-images the
 file stores internally. When the file carries a separate poster, it comes out as `poster.png`,
@@ -63,5 +74,8 @@ executable for Windows x64/x86/ARM64, Linux x64/ARM64/ARM and macOS on both arch
 ---
 
 Built on [SharpApng](https://www.nuget.org/packages/SharpApng), a dependency-free APNG library.
+`--zopfli` uses [ZopfliSharp](https://www.nuget.org/packages/ZopfliSharp), which the tool
+includes under the Apache License 2.0; its licence and NOTICE are in `THIRD-PARTY-NOTICES.md`,
+shipped in this package and in every release archive.
 
-[Source and documentation](https://github.com/fderenty/SharpApng) · MIT
+[Source and documentation](https://github.com/fderenty/SharpApng) · MIT, ZopfliSharp Apache-2.0

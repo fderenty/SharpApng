@@ -74,6 +74,10 @@ sharpapng create -o walk.png -d 80 frame*.png
 Or grab a standalone binary from the releases page if you would rather not install a runtime at
 all — see below.
 
+The tool, unlike the library, has one dependency: [ZopfliSharp](https://github.com/fderenty/ZopfliSharp),
+for its `--zopfli` option, licensed under Apache-2.0. Its licence and NOTICE ship with the tool in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+
 ### From source
 
 ```bash
@@ -85,8 +89,9 @@ dotnet pack -c Release -o dist    # both packages
 ### Native binaries
 
 Releases ship a standalone `sharpapng` executable per platform. **No .NET runtime to install** —
-the binaries are ahead-of-time compiled, and zlib is linked in statically, so a release is one
-file with no dependencies whatsoever.
+the binaries are ahead-of-time compiled, and zlib and ZopfliSharp are linked in statically, so a
+release is one file with no dependencies whatsoever. Each archive carries the licence and
+`THIRD-PARTY-NOTICES.md` beside it.
 
 | Platform | Runtime identifier | Build |
 |---|---|---|
@@ -172,6 +177,31 @@ document.Add(secondImage, 100);
 
 ApngWriter.WriteFile(document, "out.png");
 ```
+
+### A stronger compressor
+
+Every `IDAT` and `fdAT` is compressed by the runtime's zlib unless you supply a
+`ZlibCompressor`. It receives an image's filtered scanlines, filter bytes included, and returns a
+complete zlib stream. With [ZopfliSharp](https://www.nuget.org/packages/ZopfliSharp) that is one
+line:
+
+```csharp
+using ZopfliSharp;
+
+var options = new ApngWriterOptions { Compressor = data => Zopfli.Compress(data, ZopfliFormat.Zlib) };
+```
+
+`PngCodec.Encode`, `EncodeFile` and `EncodeToArray` have overloads taking one, for still images.
+
+The library stays free of dependencies: the compressor is yours to reference, and without one the
+output is byte-for-byte what it was before the extension point existed. The compressor is called
+once per image with the whole image, poster included, and its output must be zlib (RFC 1950):
+raw deflate or gzip is refused with an exception rather than written into a PNG that no decoder
+could read.
+
+Zopfli trades a great deal of time for a few percent. On 47 frames of 300×250, 11 MB of
+scanlines, it gave a file 6.2 % smaller than `CompressionLevel.SmallestSize` and took 110 s of
+CPU where zlib took 0.7 s. See [the `--zopfli` measurements](#smaller-files-with-zopfli) below.
 
 ### Reading
 
@@ -333,7 +363,7 @@ sharpapng create --output <file> [options] <image>...
 sharpapng convert <input> [--output <file>] [options]
 sharpapng resize <input> [--size <px>] [--output <file>]
 sharpapng info <file>
-sharpapng extract <file> <directory>
+sharpapng extract <file> <directory> [--zopfli]
 ```
 
 ```bash
@@ -349,6 +379,33 @@ sharpapng extract walk.png ./frames    # composited frames, plus poster.png if t
 compresses as tightly as zlib allows. `--poster` adds a still that only viewers without APNG
 support display, kept out of the animation itself; `extract` writes it back out as `poster.png`,
 so the two commands round-trip a file completely.
+
+### Smaller files with Zopfli
+
+`--zopfli` compresses with Zopfli instead of zlib, in every command that writes: `create`,
+`convert`, `resize` and `extract`. The pixels are exactly the same and any PNG decoder reads the
+result; only the file size and the time change. Measured, against `--smallest`:
+
+| Input | `--smallest` | `--zopfli` | Smaller by | Time, `--smallest` → `--zopfli` |
+|---|---:|---:|---:|---:|
+| 47-frame animation, 300×250 | 852,565 bytes | 799,742 bytes | 6.2 % | 1.4 s → 94 s |
+| 12-frame animation, 350×279 | 629,601 bytes | 576,853 bytes | 8.4 % | 0.7 s → 13 s |
+| Small GIFs converted to APNG | 18,585–21,683 bytes | 17,071–19,813 bytes | 8.1–8.6 % | 0.3 s → 1.3 s |
+| 256 px thumbnail (`resize`) | 34,635 bytes¹ | 32,015 bytes | 7.6 %¹ | 0.3 s → 2.2 s |
+
+¹ `resize` has no `--smallest`; compared with its default zlib level.
+
+Times are wall-clock for the whole command on an 8-thread machine, .NET 10.0.14. The price is
+steep: Zopfli spent 110 s of CPU on the 47-frame animation where zlib spent 0.7 s, being slowest on
+the flat, repetitive scanlines that animation frames are made of. `--zopfli-iterations <n>` trades
+one for the other; the default is Zopfli's own, 15. Each image is compressed on every core, which
+roughly halves the time when frames are large — 20 s on one thread against 11 s for the 12-frame
+animation — but saves under 10 % when they are small, as with the 47 frames of 300×250. Worth it
+for assets compressed once and served many times.
+
+`--zopfli` replaces zlib, so combining it with `--fast` or `--smallest` is refused. The tool takes
+it from [ZopfliSharp](https://github.com/fderenty/ZopfliSharp) (Apache-2.0); the library does not
+depend on it, and offers the same through [`ZlibCompressor`](#a-stronger-compressor).
 
 ---
 
@@ -429,6 +486,10 @@ the one that remains.
 That is the single heaviest piece of a PNG codec, and it ships with the runtime. What remains —
 CRC-32, the five scanline filters, chunk framing, the animation model — is a few hundred lines.
 
+Where the runtime's zlib is not enough, `ZlibCompressor` lets the caller bring a stronger
+compressor without the library depending on it. The command line tool does exactly that with
+Zopfli; the library package itself still declares no dependency.
+
 ### Why `BlendOp.Source` by default
 
 `Over` compresses slightly better on sprite-like content, because unchanged pixels inside the
@@ -483,12 +544,13 @@ and four-component CMYK are refused with a clear message rather than approximate
 
 ## Testing
 
-125 tests covering PNG round-trips at both depths, every colour type and bit depth on decode,
+136 tests covering PNG round-trips at both depths, every colour type and bit depth on decode,
 Adam7 interlacing, palette and `tRNS` transparency, filter reversibility, BMP variants, GIF
 decoding (LZW, interlacing, disposal, transparency, colour keying), JPEG decoding (progressive
 scans, chroma subsampling, restart markers, EXIF orientation, and the formats it refuses),
 resampling, and APNG round-trips — including a frame that erases what came before it, the case
-`blend_op = OVER` cannot express.
+`blend_op = OVER` cannot express. The `ZlibCompressor` tests run against ZopfliSharp, which the
+test project references; the library does not.
 
 Output is additionally checked against **Pillow**, an independent APNG implementation, rather
 than only against this library's own reader. Tests never compare encoded bytes against a stored
